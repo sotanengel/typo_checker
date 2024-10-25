@@ -33,7 +33,7 @@ def create_rust_dictionary_file(input_file, output_file):
     with open(output_file, 'w', encoding='utf-8') as outfile:
         outfile.write('pub fn get_dictionary() -> [[&\'static str; {}]; {}] {{\n'.format(max_length, len(result)))
         outfile.write('    [\n')
-        for group in result:
+        for group in result[1:]:
             outfile.write('        [\n')
             for word in group:
                 outfile.write(f'            "{word}",\n')
