@@ -8,27 +8,39 @@ def create_rust_dictionary_file(input_file, output_file):
         for line in infile:
             # 各行をタブで分割し、1列目を取得
             first_column = line.split('\t')[0].strip()
-            if first_column:  # 空でない場合に処理
+            # 空白で分割して2つ以上の単語がない場合
+            if len(first_column.split()) == 1:
                 # カンマで分割し、各単語をリストに追加
                 words = [word.strip() for word in first_column.split(',')]
                 for word in words:
-                    length_dict[len(word)].append(word)
+                    if word:  # 空でない場合に追加
+                        length_dict[len(word)].append(word)
+
+    # 各長さのリストの最大数を求める
+    max_length = max(len(group) for group in length_dict.values())
+
+    # 固定長の配列に収めるための最大長さを設定
+    result = []
 
     # 長さごとにリストを作成し、文字数の順にソート
-    result = [sorted(length_dict[key]) for key in sorted(length_dict)]
+    for key in sorted(length_dict):
+        sorted_words = sorted(length_dict[key])  # ソート
+        while len(sorted_words) < max_length:
+            sorted_words.append("")  # 空の文字列で埋める
+        result.append(sorted_words[:max_length])  # 固定長の配列に追加
 
     # Rustファイルの生成
     with open(output_file, 'w', encoding='utf-8') as outfile:
-        outfile.write('pub fn get_dictionary() -> Vec<Vec<&\'static str>> {\n')
-        outfile.write('    vec![\n')
+        outfile.write('pub fn get_dictionary() -> [[&\'static str; {}]; {}] {{\n'.format(max_length, len(result)))
+        outfile.write('    [\n')
         for group in result:
-            # グループ内の単語を文字列形式で出力
-            outfile.write('        vec![\n')
+            outfile.write('        [\n')
             for word in group:
                 outfile.write(f'            "{word}",\n')
             outfile.write('        ],\n')
         outfile.write('    ]\n')
         outfile.write('}\n')
+
 
 # 実行部分
 input_file = '20241025_ejdict-hand-utf8.txt'  # 入力ファイル名
