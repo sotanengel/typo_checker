@@ -25,22 +25,25 @@ def create_rust_dictionary_file(input_file, output_file):
     # 長さごとにリストを作成し、文字数の順にソート
     for key in sorted(length_dict):
         sorted_words = sorted(length_dict[key])  # ソート
+        # 空の文字列の代わりにNoneを使用
         while len(sorted_words) < max_length:
-            sorted_words.append("")  # 空の文字列で埋める
+            sorted_words.append(None)  # Noneで埋める
         result.append(sorted_words[:max_length])  # 固定長の配列に追加
 
     # Rustファイルの生成
     with open(output_file, 'w', encoding='utf-8') as outfile:
-        outfile.write('pub fn get_dictionary() -> [[&\'static str; {}]; {}] {{\n'.format(max_length, len(result)))
+        outfile.write('pub fn get_dictionary() -> [[Option<&\'static str>; {}]; {}] {{\n'.format(max_length, len(result)))
         outfile.write('    [\n')
         for group in result[1:]:
             outfile.write('        [\n')
             for word in group:
-                outfile.write(f'            "{word}",\n')
+                if word is not None:
+                    outfile.write(f'            Some("{word}"),\n')
+                else:
+                    outfile.write('            None,\n')
             outfile.write('        ],\n')
         outfile.write('    ]\n')
         outfile.write('}\n')
-
 
 # 実行部分
 input_file = '20241025_ejdict-hand-utf8.txt'  # 入力ファイル名
