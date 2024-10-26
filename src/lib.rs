@@ -29,14 +29,14 @@ impl SimilarWord {
 }
 
 #[derive(Debug)]
-pub struct TypoChecResult {
+pub struct TypoCheckResult {
     match_word: Option<String>,
     similar_word_list: Option<Vec<SimilarWord>>,
 }
 
-impl TypoChecResult {
-    fn new() -> TypoChecResult {
-        TypoChecResult {
+impl TypoCheckResult {
+    fn new() -> TypoCheckResult {
+        TypoCheckResult {
           match_word: None,
           similar_word_list: None,
         }
@@ -125,13 +125,13 @@ fn get_top_similar_words(mut similar_word_list: Vec<SimilarWord>, pickup_similar
   }
 }
 
-pub fn check_a_word(check_word: String) -> TypoChecResult {
+pub fn check_a_word(check_word: String) -> TypoCheckResult {
   let check_word_length = check_word.chars().count();
   let select_word_range: usize = 2;
   let pickup_similar_word_num: usize = 5;
   let word_dic = get_dictionary();
 
-  let mut output = TypoChecResult::new();
+  let mut output = TypoCheckResult::new();
   let mut similar_word_list: Vec<SimilarWord> = Vec::new();
 
   // インデックスを初期化
