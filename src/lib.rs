@@ -165,6 +165,8 @@ pub fn check(check_word: String) -> TypoChecResult{
 
           if levenshtein_length==0 {
               output.match_word = Some(word.to_string());
+              output.similar_word_list = None;
+              return output;
           } else {
             similar_word_list.push(SimilarWord::new(word.to_string(), levenshtein_length));
           }
