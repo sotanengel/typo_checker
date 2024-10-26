@@ -1,4 +1,4 @@
-pub fn get_dictionary() -> [[Option<&'static str>; 5612]; 21] {
+pub fn get_dictionary() -> [[Option<&'static str>; 5612]; 20] {
     [
         [
             Some("'m"),

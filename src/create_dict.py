@@ -32,7 +32,7 @@ def create_rust_dictionary_file(input_file, output_file):
 
     # Rustファイルの生成
     with open(output_file, 'w', encoding='utf-8') as outfile:
-        outfile.write('pub fn get_dictionary() -> [[Option<&\'static str>; {}]; {}] {{\n'.format(max_length, len(result)))
+        outfile.write('pub fn get_dictionary() -> [[Option<&\'static str>; {}]; {}] {{\n'.format(max_length, len(result)-1))
         outfile.write('    [\n')
         for group in result[1:]:
             outfile.write('        [\n')
