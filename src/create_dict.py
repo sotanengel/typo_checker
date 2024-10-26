@@ -1,4 +1,5 @@
 from collections import defaultdict
+import re
 
 def create_rust_dictionary_file(input_file, output_file):
     length_dict = defaultdict(list)
@@ -13,7 +14,8 @@ def create_rust_dictionary_file(input_file, output_file):
                 # カンマで分割し、各単語をリストに追加
                 words = [word.strip() for word in first_column.split(',')]
                 for word in words:
-                    if word:  # 空でない場合に追加
+                    # 単語がアルファベットのみの場合のみ追加
+                    if word and re.match(r'^[a-zA-Z]+$', word):
                         length_dict[len(word)].append(word)
 
     # 各長さのリストの最大数を求める
