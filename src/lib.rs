@@ -99,7 +99,7 @@ fn levenshtein(a: &str, b: &str) -> usize {
     generic_levenshtein(&StringWrapper(a), &StringWrapper(b))
 }
 
-fn calculate_word_list_levenshtein_length(word_list: &[[Option<&str>; 5612]], check_word: &String, mut similar_word_list: Vec<SimilarWord>) -> Vec<SimilarWord> {
+fn calculate_word_list_levenshtein_length(word_list: &[[Option<&str>; 5447]], check_word: &String, mut similar_word_list: Vec<SimilarWord>) -> Vec<SimilarWord> {
   for temp_same_length_word_list in word_list.iter() {
     for temp_word in temp_same_length_word_list.iter(){
       match temp_word {
@@ -130,7 +130,6 @@ pub fn check(check_word: String) -> TypoChecResult{
   let select_word_range: usize = 2;
   let pickup_similar_word_num: usize = 5;
   let word_dic = get_dictionary();
-  let word_dic_length: usize = 5612;
 
   let mut output = TypoChecResult::new();
   let mut similar_word_list: Vec<SimilarWord> = Vec::new();
@@ -157,8 +156,7 @@ pub fn check(check_word: String) -> TypoChecResult{
   let selected_upper_word_dic = &word_dic[check_word_length-1..select_word_upper_index];
 
   // 完全に一致する単語を探索する
-  for i in 0..(word_dic_length-1) {
-    let temp_word = same_length_word_dic[i];
+  for temp_word in same_length_word_dic.iter() {
     match temp_word {
         Some(word) => {
           let levenshtein_length = levenshtein(&check_word, &word);
