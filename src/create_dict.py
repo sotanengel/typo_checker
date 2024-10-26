@@ -2,7 +2,7 @@ from collections import defaultdict
 import re
 
 def create_rust_dictionary_file(input_file, output_file):
-    length_dict = defaultdict(list)
+    length_dict = defaultdict(set)  # setを使用して重複を防ぐ
 
     # 辞書ファイルの読み込み
     with open(input_file, 'r', encoding='utf-8') as infile:
@@ -16,7 +16,7 @@ def create_rust_dictionary_file(input_file, output_file):
                 for word in words:
                     # 単語がアルファベットのみの場合のみ追加
                     if word and re.match(r'^[a-zA-Z]+$', word):
-                        length_dict[len(word)].append(word)
+                        length_dict[len(word)].add(word)  # setに追加
 
     # 各長さのリストの最大数を求める
     max_length = max(len(group) for group in length_dict.values())
