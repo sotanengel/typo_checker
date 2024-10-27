@@ -13,6 +13,15 @@ impl<'a, 'b> IntoIterator for &'a StringWrapper<'b> {
         self.0.chars()
     }
 }
+
+/// Struct that stores information about similar word
+///
+/// 似ている単語の情報を格納する構造体です
+///
+/// # Arguments
+///
+/// * `spelling` - Spelling of similar words(似ている単語のスペル)
+/// * `levenshtein_length` - Levenshtein Distance(レーベンシュタイン距離)
 #[derive(Debug, Clone)]
 pub struct SimilarWord {
     spelling: String,
@@ -28,6 +37,22 @@ impl SimilarWord {
     }
 }
 
+/// Struct to store typo search results.
+///
+/// タイポの検索結果を格納する構造体です
+///
+/// # Arguments
+///
+/// * `match_word` - Stores the exact match(完全一致した単語を格納します)
+/// * `similar_word_list` - Stores information on similar words in an array(似ている単語の情報を配列で格納します)
+///
+/// # Examples
+///
+/// ```
+/// let a = "applo";
+/// let typo_chec_result = typo_checker::check_a_word(a.to_string());
+/// println!("typo_chec_result: {:?}", typo_chec_result);
+/// ```
 #[derive(Debug)]
 pub struct TypoCheckResult {
     match_word: Option<String>,
@@ -59,14 +84,9 @@ impl TypoCheckResult {
     }
 }
 
-/// Calculates the minimum number of insertions, deletions, and substitutions
-/// required to change one sequence into the other.
+/// Calculate the Levenshtein distance
 ///
-/// ```
-/// use strsim::generic_levenshtein;
-///
-/// assert_eq!(3, generic_levenshtein(&[1,2,3], &[1,2,3,4,5,6]));
-/// ```
+/// レーベンシュタイン距離を計算します
 fn generic_levenshtein<'a, 'b, Iter1, Iter2, Elem1, Elem2>(a: &'a Iter1, b: &'b Iter2) -> usize
 where
     &'a Iter1: IntoIterator<Item = Elem1>,
@@ -95,12 +115,18 @@ where
     result
 }
 
-/// Calculates the minimum number of insertions, deletions, and substitutions
-/// required to change one string into the other.
+/// Call generic_levenshtein to calculate the Levenshtein distance
+///
+/// レーベンシュタイン距離を計算するgeneric_levenshteinを呼び出します
+///
+/// # Arguments
+///
+/// * `a` - Word A to be compared(比較対象の単語A)
+/// * `b` - Word B to be compared(比較対象の単語B)
+///
+/// # Examples
 ///
 /// ```
-/// use strsim::levenshtein;
-///
 /// assert_eq!(3, levenshtein("kitten", "sitting"));
 /// ```
 fn levenshtein(a: &str, b: &str) -> usize {
@@ -143,6 +169,23 @@ fn get_top_similar_words(
     }
 }
 
+/// Returns TypoCheckResult type words that match or are similar to the word to be checked.
+/// Similar_word_list of type TypoCheckResult contains the top 5 words with short Levenshtein distance.
+///
+/// チェックする単語に合致、もしくは類似する単語をTypoCheckResult型で返却します。
+/// TypoCheckResult型のsimilar_word_listには、レーベンシュタイン距離が短い&上位5つの単語が格納されます。
+///
+/// # Arguments
+///
+/// * `check_word` - Words to check(チェックする単語)
+///
+/// # Examples
+///
+/// ```
+/// let a = "applo";
+/// let typo_chec_result = typo_checker::check_a_word(a.to_string());
+/// println!("typo_chec_result: {:?}", typo_chec_result);
+/// ```
 pub fn check_a_word(check_word: String) -> TypoCheckResult {
     let check_word_length = check_word.chars().count();
     let select_word_range: usize = 2;
@@ -218,6 +261,3 @@ pub fn check_a_word(check_word: String) -> TypoCheckResult {
 
     output
 }
-
-#[cfg(test)]
-mod tests {}
