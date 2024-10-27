@@ -1,11 +1,15 @@
 [package]
 name = "typo_checker"
+version = "0.1.0"
+edition = "2021"
+
 description = "Searches for typos of English words and returns matches or similar words.(英単語のタイポを検索し、合致もしくは類似する単語を返却します)"
+license = "MIT"
+
 repository = "https://github.com/sotanengel/typo_checker"
 readme = "README.md"
 keywords=["typo", "words", "Levenshtein"]
 exclude = ["src/create_dict.py", "images/", "src/20241025_ejdict-hand-utf8.txt"]
-version = "0.1.0"
-edition = "2021"
+
 
 [dependencies]
