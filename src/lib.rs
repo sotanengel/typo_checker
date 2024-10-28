@@ -134,7 +134,7 @@ fn levenshtein(a: &str, b: &str) -> usize {
 }
 
 fn calculate_word_list_levenshtein_length(
-    word_list: &[[Option<&str>; 5428]],
+    word_list: &[[Option<&str>; 5416]],
     check_word: &String,
     mut similar_word_list: Vec<SimilarWord>,
 ) -> Vec<SimilarWord> {
@@ -187,7 +187,8 @@ fn get_top_similar_words(
 /// println!("typo_chec_result: {:?}", typo_chec_result);
 /// ```
 pub fn check_a_word(check_word: String) -> TypoCheckResult {
-    let check_word_length = check_word.chars().count();
+    let lowercase_check_word = check_word.to_lowercase();
+    let check_word_length = lowercase_check_word.chars().count();
     let select_word_range: usize = 2;
     let pickup_similar_word_num: usize = 5;
     let word_dic = get_dictionary();
@@ -226,7 +227,7 @@ pub fn check_a_word(check_word: String) -> TypoCheckResult {
     for temp_word in same_length_word_dic.iter() {
         match temp_word {
             Some(word) => {
-                let levenshtein_length = levenshtein(&check_word, &word);
+                let levenshtein_length = levenshtein(&lowercase_check_word, &word);
 
                 if levenshtein_length == 0 {
                     output.match_word = Some(word.to_string());
@@ -243,14 +244,14 @@ pub fn check_a_word(check_word: String) -> TypoCheckResult {
     // 類似する単語を探す(探す単語よりも文字数がselect_word_range少ないもの)
     similar_word_list = calculate_word_list_levenshtein_length(
         selected_lower_word_dic,
-        &check_word,
+        &lowercase_check_word,
         similar_word_list,
     );
 
     // 類似する単語を探す(探す単語よりも文字数がselect_word_range多いもの)
     similar_word_list = calculate_word_list_levenshtein_length(
         selected_upper_word_dic,
-        &check_word,
+        &lowercase_check_word,
         similar_word_list,
     );
 
