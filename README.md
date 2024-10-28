@@ -6,7 +6,7 @@
 ```
 fn main() {
     let a = "typo";
-    let typo_chec_result = typo_checker::check_a_word(a.to_string());
+    let typo_chec_result = typo_checker::check_a_word(a.to_string(), Some(3), Some(20));
 
     println!("typo_chec_result: {:?}", typo_chec_result);
 }

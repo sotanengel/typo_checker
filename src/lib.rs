@@ -154,43 +154,56 @@ fn calculate_word_list_levenshtein_length(
 
 fn get_top_similar_words(
     mut similar_word_list: Vec<SimilarWord>,
-    pickup_similar_word_num: usize,
+    output_levenshtein_cutoff: Option<usize>,
+    pickup_similar_word_num: Option<usize>,
 ) -> Vec<SimilarWord> {
-    // `levenshtein_length`の小さい順にソート
+    // `levenshtein_length` の小さい順にソート
     similar_word_list.sort_by_key(|word| word.levenshtein_length);
 
-    if similar_word_list.len() <= pickup_similar_word_num {
+    // カットオフが指定されている場合、それより大きい単語をフィルタする
+    if let Some(cutoff) = output_levenshtein_cutoff {
+        similar_word_list.retain(|word| word.levenshtein_length <= cutoff);
+    }
+
+    // `pickup_similar_word_num` が指定されていない場合はデフォルトで10
+    let num_to_pick = pickup_similar_word_num.unwrap_or(10);
+
+    // 結果が必要な数以下の場合、そのまま返す
+    if similar_word_list.len() <= num_to_pick {
         similar_word_list
     } else {
-        similar_word_list
-            .into_iter()
-            .take(pickup_similar_word_num)
-            .collect()
+        // 必要な数までを取り出して返す
+        similar_word_list.into_iter().take(num_to_pick).collect()
     }
 }
 
 /// Returns TypoCheckResult type words that match or are similar to the word to be checked.
-/// Similar_word_list of type TypoCheckResult contains the top 5 words with short Levenshtein distance.
+/// Similar_word_list of type TypoCheckResult contains the top `pickup_similar_word_num` words with Levenshtein distance(less than or equal to `output_levenshtein_cutoff`).
 ///
 /// チェックする単語に合致、もしくは類似する単語をTypoCheckResult型で返却します。
-/// TypoCheckResult型のsimilar_word_listには、レーベンシュタイン距離が短い&上位5つの単語が格納されます。
+/// TypoCheckResult型のsimilar_word_listには、レーベンシュタイン距離がoutput_levenshtein_cutoff以下&pickup_similar_word_numで指定した個数の上位の単語が格納されます。
 ///
 /// # Arguments
 ///
 /// * `check_word` - Words to check(チェックする単語)
+/// * `output_levenshtein_cutoff` - Cutoff value of Levenshtein distance to output(出力するレーベンシュタイン距離のカットオフ値)
+/// * `pickup_similar_word_num` - Number of words to store in the list of similar_word_list(似ている単語のリストに格納する単語数)
 ///
 /// # Examples
 ///
 /// ```
 /// let a = "applo";
-/// let typo_chec_result = typo_checker::check_a_word(a.to_string());
+/// let typo_chec_result = typo_checker::check_a_word(a.to_string(), Some(3), Some(20));
 /// println!("typo_chec_result: {:?}", typo_chec_result);
 /// ```
-pub fn check_a_word(check_word: String) -> TypoCheckResult {
+pub fn check_a_word(
+    check_word: String,
+    output_levenshtein_cutoff: Option<usize>,
+    pickup_similar_word_num: Option<usize>,
+) -> TypoCheckResult {
     let lowercase_check_word = check_word.to_lowercase();
     let check_word_length = lowercase_check_word.chars().count();
-    let select_word_range: usize = 2;
-    let pickup_similar_word_num: usize = 5;
+    let select_word_range: usize = output_levenshtein_cutoff.unwrap_or(2);
     let word_dic = get_dictionary();
 
     let mut output = TypoCheckResult::new();
@@ -257,6 +270,7 @@ pub fn check_a_word(check_word: String) -> TypoCheckResult {
 
     output.similar_word_list = Some(get_top_similar_words(
         similar_word_list,
+        output_levenshtein_cutoff,
         pickup_similar_word_num,
     ));
 
