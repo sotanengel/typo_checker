@@ -16,7 +16,8 @@ def create_rust_dictionary_file(input_file, output_file):
                 for word in words:
                     # 単語がアルファベットのみの場合のみ追加
                     if word and re.match(r'^[a-zA-Z]+$', word):
-                        length_dict[len(word)].add(word)  # setに追加
+                        # 単語を小文字に変換してからセットに追加
+                        length_dict[len(word)].add(word.lower())  # 小文字に変換してから追加
 
     # 各長さのリストの最大数を求める
     max_length = max(len(group) for group in length_dict.values())
