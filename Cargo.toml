@@ -13,3 +13,4 @@ exclude = ["src/create_dict.py", "images/", "src/20241025_ejdict-hand-utf8.txt"]
 
 
 [dependencies]
+regex = "1.11.1"

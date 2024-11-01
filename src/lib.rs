@@ -1,7 +1,9 @@
 use std::cmp::min;
+use std::collections::HashMap;
 use std::str::Chars;
 mod dictionary;
 pub use dictionary::get_dictionary;
+use regex::Regex;
 
 struct StringWrapper<'a>(&'a str);
 
@@ -22,10 +24,40 @@ impl<'a, 'b> IntoIterator for &'a StringWrapper<'b> {
 ///
 /// * `spelling` - Spelling of similar words(似ている単語のスペル)
 /// * `levenshtein_length` - Levenshtein Distance(レーベンシュタイン距離)
+#[derive(Debug, Clone, PartialEq, Eq, Hash)]
+pub enum CharacterPositon {
+    Head,
+    Tail,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Hash)]
+pub enum TypoType {
+    ExtraCharacters {
+        character: char,
+        position: CharacterPositon,
+    },
+    MissingCharacters {
+        character: char,
+        position: CharacterPositon,
+    },
+    CloseKeyboardPlacement,
+    SimilarShapes,
+    UndefinedType,
+}
+
+/// Struct that stores information about similar word
+///
+/// 似ている単語の情報を格納する構造体です
+///
+/// # Arguments
+///
+/// * `spelling` - Spelling of similar words(似ている単語のスペル)
+/// * `levenshtein_length` - Levenshtein Distance(レーベンシュタイン距離)
 #[derive(Debug, Clone)]
 pub struct SimilarWord {
     spelling: String,
     levenshtein_length: usize,
+    typo_type: TypoType,
 }
 
 impl SimilarWord {
@@ -33,7 +65,37 @@ impl SimilarWord {
         SimilarWord {
             spelling,
             levenshtein_length,
+            typo_type: TypoType::UndefinedType,
         }
+    }
+
+    fn sort_by_typo_type(
+        similar_word_list: &mut Vec<SimilarWord>,
+        sort_typo_type_setting: &Vec<TypoType>,
+    ) {
+        // TypoTypeの順序をHashMapに保存
+        let typo_type_order: HashMap<_, _> = sort_typo_type_setting
+            .iter()
+            .enumerate()
+            .map(|(i, typo_type)| (typo_type, i))
+            .collect();
+
+        // ソート
+        similar_word_list.sort_by(|a, b| {
+            a.levenshtein_length
+                .cmp(&b.levenshtein_length)
+                .then_with(|| {
+                    let a_order = typo_type_order
+                        .get(&a.typo_type)
+                        .copied()
+                        .unwrap_or(sort_typo_type_setting.len());
+                    let b_order = typo_type_order
+                        .get(&b.typo_type)
+                        .copied()
+                        .unwrap_or(sort_typo_type_setting.len());
+                    a_order.cmp(&b_order)
+                })
+        });
     }
 }
 
@@ -152,28 +214,193 @@ fn calculate_word_list_levenshtein_length(
     similar_word_list
 }
 
+fn find_missing_or_extra_chars(check_word: &str, mut similar_word: SimilarWord) -> SimilarWord {
+    let check_len = check_word.chars().count();
+    let similar_len = similar_word.spelling.chars().count();
+
+    if similar_len < check_len {
+        // similar_wordが短い場合、check_wordに入っている余分な文字を探す
+        let re_prefix =
+            Regex::new(&format!(r"^{}(.+)", regex::escape(&similar_word.spelling))).unwrap();
+        let re_suffix =
+            Regex::new(&format!(r"(.+){}$", regex::escape(&similar_word.spelling))).unwrap();
+
+        if let Some(captures) = re_prefix.captures(check_word) {
+            let missing_prefix = captures.get(1).unwrap().as_str();
+            similar_word.typo_type = TypoType::ExtraCharacters {
+                character: missing_prefix.chars().next().unwrap(),
+                position: CharacterPositon::Tail,
+            };
+        }
+
+        if let Some(captures) = re_suffix.captures(check_word) {
+            let missing_prefix = captures.get(1).unwrap().as_str();
+            similar_word.typo_type = TypoType::ExtraCharacters {
+                character: missing_prefix.chars().next().unwrap(),
+                position: CharacterPositon::Head,
+            };
+        }
+    } else {
+        // similar_wordが長い場合、check_wordに足りない文字を探す
+        let re_prefix = Regex::new(&format!(r"^(.+){}", regex::escape(check_word))).unwrap();
+        let re_suffix = Regex::new(&format!(r"{}(.+)$", regex::escape(check_word))).unwrap();
+
+        if let Some(captures) = re_prefix.captures(&similar_word.spelling) {
+            let extra_prefix = captures.get(1).unwrap().as_str();
+            similar_word.typo_type = TypoType::MissingCharacters {
+                character: extra_prefix.chars().next().unwrap(),
+                position: CharacterPositon::Head,
+            };
+        }
+
+        if let Some(captures) = re_suffix.captures(&similar_word.spelling) {
+            let extra_suffix = captures.get(1).unwrap().as_str();
+            similar_word.typo_type = TypoType::MissingCharacters {
+                character: extra_suffix.chars().next().unwrap(),
+                position: CharacterPositon::Tail,
+            };
+        }
+    }
+    similar_word
+}
+
+fn close_keyboard_placement_list() -> HashMap<char, Vec<char>> {
+    let mut output_hashmap: HashMap<char, Vec<char>> = HashMap::new();
+
+    // キーボード1列目
+    output_hashmap.insert('q', vec!['w', 's', 'a']);
+    output_hashmap.insert('w', vec!['q', 'e', 'a', 's', 'd']);
+    output_hashmap.insert('e', vec!['w', 'r', 's', 'd', 'f']);
+    output_hashmap.insert('r', vec!['e', 't', 'd', 'f', 'g']);
+    output_hashmap.insert('t', vec!['r', 'y', 'f', 'g', 'h']);
+    output_hashmap.insert('y', vec!['t', 'u', 'g', 'h', 'j']);
+    output_hashmap.insert('u', vec!['y', 'i', 'h', 'j', 'k']);
+    output_hashmap.insert('i', vec!['u', 'o', 'j', 'k', 'l']);
+    output_hashmap.insert('o', vec!['i', 'p', 'k', 'l']);
+    output_hashmap.insert('p', vec!['o', 'l']);
+
+    // キーボード2列目
+    output_hashmap.insert('a', vec!['q', 'w', 's', 'x', 'z']);
+    output_hashmap.insert('s', vec!['q', 'w', 'e', 'd', 'c', 'x', 'z', 'a']);
+    output_hashmap.insert('d', vec!['w', 'e', 'r', 'f', 'v', 'c', 'x', 's']);
+    output_hashmap.insert('f', vec!['e', 'r', 't', 'g', 'b', 'v', 'c', 'd']);
+    output_hashmap.insert('g', vec!['r', 't', 'y', 'h', 'n', 'b', 'v', 'f']);
+    output_hashmap.insert('h', vec!['t', 'y', 'u', 'j', 'm', 'n', 'b', 'g']);
+    output_hashmap.insert('j', vec!['y', 'u', 'i', 'k', 'm', 'n', 'h']);
+    output_hashmap.insert('k', vec!['u', 'i', 'o', 'l', 'm', 'j']);
+    output_hashmap.insert('l', vec!['i', 'o', 'p', 'k']);
+
+    // キーボード3列目
+    output_hashmap.insert('z', vec!['a', 's', 'x']);
+    output_hashmap.insert('x', vec!['a', 's', 'd', 'c', 'z']);
+    output_hashmap.insert('c', vec!['s', 'd', 'f', 'v', 'x']);
+    output_hashmap.insert('v', vec!['d', 'f', 'g', 'b', 'c']);
+    output_hashmap.insert('b', vec!['f', 'g', 'h', 'n', 'v']);
+    output_hashmap.insert('n', vec!['g', 'h', 'j', 'm', 'b']);
+    output_hashmap.insert('m', vec!['h', 'j', 'k', 'n']);
+
+    output_hashmap
+}
+
+fn similar_shape_list() -> Vec<Vec<char>> {
+    let mut output_vec: Vec<Vec<char>> = Vec::new();
+
+    output_vec.push(vec!['a', 'c', 'e', 'o']);
+    output_vec.push(vec!['b', 'd']);
+    output_vec.push(vec!['f', 'l']);
+    output_vec.push(vec!['g', 'q']);
+    output_vec.push(vec!['m', 'n']);
+    output_vec.push(vec!['p', 'q']);
+    output_vec.push(vec!['u', 'v']);
+
+    output_vec
+}
+
+fn find_different_a_char(check_word: &str, mut temp_word: SimilarWord) -> SimilarWord {
+    let similar_shape = similar_shape_list();
+    let close_keyboard_placement = close_keyboard_placement_list();
+
+    for (c, t) in check_word.chars().zip(temp_word.spelling.chars()) {
+        if c != t {
+            //形状が似ているか確認
+            for tmp_similar_char in similar_shape.iter() {
+                if tmp_similar_char.contains(&c) && tmp_similar_char.contains(&t) {
+                    temp_word.typo_type = TypoType::SimilarShapes;
+                    return temp_word;
+                }
+            }
+
+            //キーボード配置が近いか確認
+            let pickup_close_keyboard_placement_vec = close_keyboard_placement.get(&c).unwrap();
+
+            if pickup_close_keyboard_placement_vec.contains(&t) {
+                temp_word.typo_type = TypoType::CloseKeyboardPlacement;
+            }
+        }
+    }
+    temp_word
+}
+
 fn get_top_similar_words(
+    check_word: String,
+    check_word_length: usize,
     mut similar_word_list: Vec<SimilarWord>,
     output_levenshtein_cutoff: Option<usize>,
-    pickup_similar_word_num: Option<usize>,
+    pickup_similar_word_num: usize,
+    sort_order_of_typo_type: Option<&Vec<TypoType>>,
 ) -> Vec<SimilarWord> {
     // `levenshtein_length` の小さい順にソート
     similar_word_list.sort_by_key(|word| word.levenshtein_length);
 
-    // カットオフが指定されている場合、それより大きい単語をフィルタする
+    // カットオフが指定されている場合、それより文字数が多い単語をフィルタする
     if let Some(cutoff) = output_levenshtein_cutoff {
         similar_word_list.retain(|word| word.levenshtein_length <= cutoff);
     }
 
-    // `pickup_similar_word_num` が指定されていない場合はデフォルトで10
-    let num_to_pick = pickup_similar_word_num.unwrap_or(10);
+    // カットオフが1のものについてTypoTypeの判別を行う
+    for temp_word in similar_word_list.iter_mut() {
+        if temp_word.levenshtein_length == 1 {
+            //チェックする単語との文字数の比較を行う
+            if check_word_length == temp_word.spelling.chars().count() {
+                // CloseKeyboardPlacementかSimilarShapesの判別を行う
+                *temp_word = find_different_a_char(&check_word, temp_word.clone())
+            } else {
+                // MissingCharactersの処理を行う
+                *temp_word = find_missing_or_extra_chars(&check_word, temp_word.clone());
+            }
+        } else {
+            continue;
+        }
+    }
+
+    // TypoTypeに応じてソートを実行する
+    let default_sort_typo_type = vec![
+        TypoType::ExtraCharacters {
+            character: 'A',
+            position: CharacterPositon::Head,
+        },
+        TypoType::ExtraCharacters {
+            character: 'e',
+            position: CharacterPositon::Tail,
+        },
+        TypoType::SimilarShapes,
+        TypoType::CloseKeyboardPlacement,
+        TypoType::UndefinedType,
+    ];
+
+    let sort_typo_type = sort_order_of_typo_type.unwrap_or(&default_sort_typo_type);
+
+    SimilarWord::sort_by_typo_type(&mut similar_word_list, &sort_typo_type);
 
     // 結果が必要な数以下の場合、そのまま返す
-    if similar_word_list.len() <= num_to_pick {
+    if similar_word_list.len() <= pickup_similar_word_num {
         similar_word_list
     } else {
         // 必要な数までを取り出して返す
-        similar_word_list.into_iter().take(num_to_pick).collect()
+        similar_word_list
+            .into_iter()
+            .take(pickup_similar_word_num)
+            .collect()
     }
 }
 
@@ -199,11 +426,22 @@ fn get_top_similar_words(
 pub fn check_a_word(
     check_word: String,
     output_levenshtein_cutoff: Option<usize>,
-    pickup_similar_word_num: Option<usize>,
+    pickup_similar_word_num: usize,
+    sort_order_of_typo_type: Option<&Vec<TypoType>>,
 ) -> TypoCheckResult {
     let lowercase_check_word = check_word.to_lowercase();
     let check_word_length = lowercase_check_word.chars().count();
-    let select_word_range: usize = output_levenshtein_cutoff.unwrap_or(2);
+    let select_word_range: usize = match output_levenshtein_cutoff {
+        Some(range_num) => {
+            if range_num == 1 {
+                panic!("Please select output_levenshtein_cutoff > 1 !!");
+            } else {
+                range_num
+            }
+        }
+        None => 2,
+    };
+
     let word_dic = get_dictionary();
 
     let mut output = TypoCheckResult::new();
@@ -269,10 +507,140 @@ pub fn check_a_word(
     );
 
     output.similar_word_list = Some(get_top_similar_words(
+        lowercase_check_word,
+        check_word_length,
         similar_word_list,
         output_levenshtein_cutoff,
         pickup_similar_word_num,
+        sort_order_of_typo_type,
     ));
 
     output
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_find_missing_or_extra_chars_head() {
+        // Head のテストケース
+        let check_word = "ello";
+        let similar_word = SimilarWord {
+            spelling: "hello".to_string(),
+            typo_type: TypoType::UndefinedType,
+            levenshtein_length: 1,
+        };
+        let result = find_missing_or_extra_chars(check_word, similar_word);
+
+        assert_eq!(
+            result.typo_type,
+            TypoType::MissingCharacters {
+                character: 'h',
+                position: CharacterPositon::Head
+            }
+        );
+    }
+
+    #[test]
+    fn test_find_missing_or_extra_chars_tail() {
+        // Tail のテストケース
+        let check_word = "hell";
+        let similar_word = SimilarWord {
+            spelling: "hello".to_string(),
+            typo_type: TypoType::UndefinedType,
+            levenshtein_length: 1,
+        };
+        let result = find_missing_or_extra_chars(check_word, similar_word);
+
+        assert_eq!(
+            result.typo_type,
+            TypoType::MissingCharacters {
+                character: 'o',
+                position: CharacterPositon::Tail
+            }
+        );
+    }
+
+    #[test]
+    fn test_find_extra_chars_head() {
+        // Head の余分な文字テストケース
+        let check_word = "ahello";
+        let similar_word = SimilarWord {
+            spelling: "hello".to_string(),
+            typo_type: TypoType::UndefinedType,
+            levenshtein_length: 1,
+        };
+        let result = find_missing_or_extra_chars(check_word, similar_word);
+
+        assert_eq!(
+            result.typo_type,
+            TypoType::ExtraCharacters {
+                character: 'a',
+                position: CharacterPositon::Head
+            }
+        );
+    }
+
+    #[test]
+    fn test_find_extra_chars_tail() {
+        // Tail の余分な文字テストケース
+        let check_word = "helloo";
+        let similar_word = SimilarWord {
+            spelling: "hello".to_string(),
+            typo_type: TypoType::UndefinedType,
+            levenshtein_length: 1,
+        };
+        let result = find_missing_or_extra_chars(check_word, similar_word);
+
+        assert_eq!(
+            result.typo_type,
+            TypoType::ExtraCharacters {
+                character: 'o',
+                position: CharacterPositon::Tail
+            }
+        );
+    }
+
+    #[test]
+    fn test_find_typo_type_none() {
+        // 正しい単語の場合のテストケース
+        let check_word = "hello";
+        let similar_word = SimilarWord {
+            spelling: "hello".to_string(),
+            typo_type: TypoType::UndefinedType,
+            levenshtein_length: 0,
+        };
+        let result = find_missing_or_extra_chars(check_word, similar_word);
+
+        assert_eq!(result.typo_type, TypoType::UndefinedType);
+    }
+
+    #[test]
+    fn test_find_multiple_missing_chars() {
+        // 複数の文字が足りない場合のテストケース
+        let check_word = "hllo";
+        let similar_word = SimilarWord {
+            spelling: "hello".to_string(),
+            typo_type: TypoType::UndefinedType,
+            levenshtein_length: 1,
+        };
+        let result = find_missing_or_extra_chars(check_word, similar_word);
+
+        assert_eq!(result.typo_type, TypoType::UndefinedType);
+    }
+
+    #[test]
+    fn test_find_multiple_extra_chars() {
+        // 複数の文字が余分な場合のテストケース
+        let check_word = "heello";
+        let similar_word = SimilarWord {
+            spelling: "hello".to_string(),
+            typo_type: TypoType::UndefinedType,
+            levenshtein_length: 1,
+        };
+        let result = find_missing_or_extra_chars(check_word, similar_word);
+
+        assert_eq!(result.typo_type, TypoType::UndefinedType);
+    }
 }
