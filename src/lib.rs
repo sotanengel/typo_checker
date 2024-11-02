@@ -16,33 +16,74 @@ impl<'a, 'b> IntoIterator for &'a StringWrapper<'b> {
     }
 }
 
-/// Struct that stores information about similar word
+/// Struct is used when there are too many or too few characters in the input word
 ///
-/// 似ている単語の情報を格納する構造体です
-///
-/// # Arguments
-///
-/// * `spelling` - Spelling of similar words(似ている単語のスペル)
-/// * `levenshtein_length` - Levenshtein Distance(レーベンシュタイン距離)
+/// チェックする単語に文字の過不足があった場合に使用される構造体です
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
 pub enum CharacterPositon {
+    /// There is an over/under on the initial letter of the word(単語の頭文字に過不足があります)
     Head,
+    /// There is an over/under at the end of a word(単語の末尾の文字に過不足があります)
     Tail,
 }
 
+/// Enum that classifies the type of typo
+///
+/// タイポの種類を分類する列挙型です
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
 pub enum TypoType {
+    /// Extra character in the check word(チェックする単語に余分な文字が入っている)
     ExtraCharacters {
         character: char,
         position: CharacterPositon,
     },
+    /// Missing character in the check word(チェックする単語に足りない文字がある)
     MissingCharacters {
         character: char,
         position: CharacterPositon,
     },
+    /// The check word and the correct word have a different character in close proximity in the Qwert sequence on the keyboard.(チェックする単語と正しい単語で違う文字がキーボードのQwert配列で近い位置にある)
+    ///
+    /// Ex. a => [q, w, s, x, z]
     CloseKeyboardPlacement,
+    ///  The check word and the correct word are similar in shape.(チェックする単語と正しい単語で違う文字が形状として似ている)
+    ///
+    /// Ex. o => [a, c, e]
     SimilarShapes,
+    /// Word that cannot be classified(分類ができない単語)
     UndefinedType,
+}
+
+/// Returns the name of the enumerator stored in the TypoType enumeration type.
+/// When using this function, the fields of the ExtraCharacters and MissingCharacters are omitted.
+///
+/// TypoTypeの列挙型に格納されている列挙子の名前を返します。
+/// このときExtraCharactersとMissingCharactersの構造体の中身は省略されます。
+///
+/// # Arguments
+///
+/// * `typo_type` - Words to check(列挙子名を取得したいタイポタイプ)
+///
+/// # Examples
+///
+/// ```
+/// use typo_checker::TypoType;
+/// use typo_checker::CharacterPositon;
+/// use typo_checker::get_typo_type_name;
+///
+///
+/// let typo_type = TypoType::ExtraCharacters{character: 'a', position: CharacterPositon::Head};
+/// let typo_type_name = get_typo_type_name(&typo_type);
+/// println!("typo_type_name: {:?}", typo_type_name);
+/// ```
+pub fn get_typo_type_name(typo_type: &TypoType) -> String {
+    match typo_type {
+        TypoType::ExtraCharacters { .. } => "ExtraCharacters".to_string(),
+        TypoType::MissingCharacters { .. } => "MissingCharacters".to_string(),
+        TypoType::CloseKeyboardPlacement => "CloseKeyboardPlacement".to_string(),
+        TypoType::SimilarShapes => "SimilarShapes".to_string(),
+        TypoType::UndefinedType => "UndefinedType".to_string(),
+    }
 }
 
 /// Struct that stores information about similar word
@@ -53,6 +94,7 @@ pub enum TypoType {
 ///
 /// * `spelling` - Spelling of similar words(似ている単語のスペル)
 /// * `levenshtein_length` - Levenshtein Distance(レーベンシュタイン距離)
+/// * `typo_type` - Type of typo(タイポの種類)
 #[derive(Debug, Clone)]
 pub struct SimilarWord {
     spelling: String,
@@ -61,7 +103,7 @@ pub struct SimilarWord {
 }
 
 impl SimilarWord {
-    fn new(spelling: String, levenshtein_length: usize) -> SimilarWord {
+    pub fn new(spelling: String, levenshtein_length: usize) -> SimilarWord {
         SimilarWord {
             spelling,
             levenshtein_length,
@@ -73,28 +115,20 @@ impl SimilarWord {
         similar_word_list: &mut Vec<SimilarWord>,
         sort_typo_type_setting: &Vec<TypoType>,
     ) {
-        // TypoTypeの順序をHashMapに保存
-        let typo_type_order: HashMap<_, _> = sort_typo_type_setting
+        let typo_type_order: HashMap<String, usize> = sort_typo_type_setting
             .iter()
             .enumerate()
-            .map(|(i, typo_type)| (typo_type, i))
+            .map(|(i, typo_type)| (get_typo_type_name(typo_type), i))
             .collect();
 
-        // ソート
         similar_word_list.sort_by(|a, b| {
-            a.levenshtein_length
-                .cmp(&b.levenshtein_length)
-                .then_with(|| {
-                    let a_order = typo_type_order
-                        .get(&a.typo_type)
-                        .copied()
-                        .unwrap_or(sort_typo_type_setting.len());
-                    let b_order = typo_type_order
-                        .get(&b.typo_type)
-                        .copied()
-                        .unwrap_or(sort_typo_type_setting.len());
-                    a_order.cmp(&b_order)
-                })
+            let a_order = typo_type_order
+                .get(&get_typo_type_name(&a.typo_type))
+                .unwrap();
+            let b_order = typo_type_order
+                .get(&get_typo_type_name(&b.typo_type))
+                .unwrap();
+            a_order.cmp(b_order)
         });
     }
 }
@@ -102,22 +136,11 @@ impl SimilarWord {
 /// Struct to store typo search results.
 ///
 /// タイポの検索結果を格納する構造体です
-///
-/// # Arguments
-///
-/// * `match_word` - Stores the exact match(完全一致した単語を格納します)
-/// * `similar_word_list` - Stores information on similar words in an array(似ている単語の情報を配列で格納します)
-///
-/// # Examples
-///
-/// ```
-/// let a = "applo";
-/// let typo_chec_result = typo_checker::check_a_word(a.to_string());
-/// println!("typo_chec_result: {:?}", typo_chec_result);
-/// ```
 #[derive(Debug)]
 pub struct TypoCheckResult {
+    /// `match_word` - Stores the exact match(完全一致した単語を格納します)
     match_word: Option<String>,
+    /// `similar_word_list` - Stores information on similar words in an array(似ている単語の情報を配列で格納します)
     similar_word_list: Option<Vec<SimilarWord>>,
 }
 
@@ -189,9 +212,11 @@ where
 /// # Examples
 ///
 /// ```
+/// use typo_checker::levenshtein;
+///
 /// assert_eq!(3, levenshtein("kitten", "sitting"));
 /// ```
-fn levenshtein(a: &str, b: &str) -> usize {
+pub fn levenshtein(a: &str, b: &str) -> usize {
     generic_levenshtein(&StringWrapper(a), &StringWrapper(b))
 }
 
@@ -214,7 +239,27 @@ fn calculate_word_list_levenshtein_length(
     similar_word_list
 }
 
-fn find_missing_or_extra_chars(check_word: &str, mut similar_word: SimilarWord) -> SimilarWord {
+/// When the check word is compared to the correct word, if there are excesses or deficiencies before or after the word, the typo_type of similar_word is changed to ExtraCharacters or MissingCharacters.
+///
+/// チェックする単語を正しい単語と比較したときに、単語の前後に過不足があればsimilar_wordのtypo_typeをExtraCharactersかMissingCharactersに変更します。
+///
+/// # Arguments
+///
+/// * `check_word` - The check word(チェックする単語)
+/// * `similar_word` - SimilarWord type storing the correct word(正しい単語を格納したSimilarWord型)
+///
+/// # Examples
+///
+/// ```
+/// use typo_checker::SimilarWord;
+/// use typo_checker::find_missing_or_extra_chars;
+///
+/// let check_word = "applee";
+/// let similar_word = SimilarWord::new("apple".to_string(), 1);
+/// let return_word = find_missing_or_extra_chars(check_word, similar_word);
+/// println!("return_word: {:?}", return_word);
+/// ```
+pub fn find_missing_or_extra_chars(check_word: &str, mut similar_word: SimilarWord) -> SimilarWord {
     let check_len = check_word.chars().count();
     let similar_len = similar_word.spelling.chars().count();
 
@@ -264,7 +309,19 @@ fn find_missing_or_extra_chars(check_word: &str, mut similar_word: SimilarWord) 
     similar_word
 }
 
-fn close_keyboard_placement_list() -> HashMap<char, Vec<char>> {
+/// Returns a hashmap of adjacent alphabets on a Qwert array keyboard.
+///
+/// Qwert配列のキーボードで隣接している単語のハッシュマップを返します。
+///
+/// # Examples
+///
+/// ```
+/// use typo_checker::close_keyboard_placement_list;
+///
+/// let qwerty_hash_map = close_keyboard_placement_list();
+/// println!("qwerty_hash_map: {:?}", qwerty_hash_map);
+/// ```
+pub fn close_keyboard_placement_list() -> HashMap<char, Vec<char>> {
     let mut output_hashmap: HashMap<char, Vec<char>> = HashMap::new();
 
     // キーボード1列目
@@ -302,7 +359,26 @@ fn close_keyboard_placement_list() -> HashMap<char, Vec<char>> {
     output_hashmap
 }
 
-fn similar_shape_list() -> Vec<Vec<char>> {
+/// Returns an array of groups of alphabets that are similar in shape.
+/// Alphabets in the same array are considered “similar in shape”.
+///
+/// 形状が似ているアルファベットのグループの配列を返します。
+/// 同じ配列に入っているアルファベットは「形状が似ている」と見做しています。
+///
+/// # Arguments
+///
+/// * `check_word` - The check word(チェックする単語)
+/// * `similar_word` - SimilarWord type storing the correct word(正しい単語を格納したSimilarWord型)
+///
+/// # Examples
+///
+/// ```
+/// use typo_checker::similar_shape_list;
+///
+/// let similar_group = similar_shape_list();
+/// println!("similar_group: {:?}", similar_group);
+/// ```
+pub fn similar_shape_list() -> Vec<Vec<char>> {
     let mut output_vec: Vec<Vec<char>> = Vec::new();
 
     output_vec.push(vec!['a', 'c', 'e', 'o']);
@@ -316,7 +392,29 @@ fn similar_shape_list() -> Vec<Vec<char>> {
     output_vec
 }
 
-fn find_different_a_char(check_word: &str, mut temp_word: SimilarWord) -> SimilarWord {
+/// Change the typo_type of similar_word to SimilarShapes or CloseKeyboardPlacement when one different character has a similar shape for the same string of characters.
+/// ※In this library, check_word and temp_word to be put into this function are “with Levenshtein distance of 1”, so there is always one different character.
+///
+/// 同じ文字数の文字列に対して、異なる1文字が形状が似ていたときにtemp_wordのtypo_typeをSimilarShapesかCloseKeyboardPlacementに変更します。
+/// ※このライブラリではこの関数に入れるcheck_wordとtemp_wordは「レーベンシュタイン距離が1のもの」であるため、必ず1文字違う文字が存在しています。
+///
+/// # Arguments
+///
+/// * `check_word` - The check word(チェックする単語)
+/// * `temp_word` - SimilarWord type storing the correct word(正しい単語を格納したSimilarWord型)
+///
+/// # Examples
+///
+/// ```
+/// use typo_checker::SimilarWord;
+/// use typo_checker::find_different_a_char;
+///
+/// let check_word = "applo";
+/// let temp_word = SimilarWord::new("apple".to_string(), 1);
+/// let return_word = find_different_a_char(check_word, temp_word);
+/// println!("return_word: {:?}", return_word);
+/// ```
+pub fn find_different_a_char(check_word: &str, mut temp_word: SimilarWord) -> SimilarWord {
     let similar_shape = similar_shape_list();
     let close_keyboard_placement = close_keyboard_placement_list();
 
@@ -341,6 +439,18 @@ fn find_different_a_char(check_word: &str, mut temp_word: SimilarWord) -> Simila
     temp_word
 }
 
+/// Returns typo-check results for the check word based on output criteria such as the number of pieces to output and sort order.
+///
+/// 出力する個数やソートの順序などの出力条件に基づいて、単語のタイポチェック結果を返します。
+///
+/// # Arguments
+///
+/// * `check_word` - The check word(チェックする単語)
+/// * `check_word_length` - Length of the check word(チェックする単語の文字数)
+/// * `similar_word_list` - List of words similar to the check word(チェックする単語に似ている単語のリスト)
+/// * `output_levenshtein_cutoff` - Cutoff values by Levenshtein distance for output list(出力する似ている単語リストのレーベンシュタイン距離によるカットオフ数値)
+/// * `pickup_similar_word_num` - Cutoff value for the number of elements in output list(出力する似ている単語リストの要素数のカットオフ数値)
+/// * `sort_order_of_typo_type` - Sort criteria by TypoType for output list(出力する似ている単語リストのTypoTypeによるソート条件)
 fn get_top_similar_words(
     check_word: String,
     check_word_length: usize,
@@ -379,8 +489,8 @@ fn get_top_similar_words(
             character: 'A',
             position: CharacterPositon::Head,
         },
-        TypoType::ExtraCharacters {
-            character: 'e',
+        TypoType::MissingCharacters {
+            character: 'Z',
             position: CharacterPositon::Tail,
         },
         TypoType::SimilarShapes,
@@ -389,7 +499,6 @@ fn get_top_similar_words(
     ];
 
     let sort_typo_type = sort_order_of_typo_type.unwrap_or(&default_sort_typo_type);
-
     SimilarWord::sort_by_typo_type(&mut similar_word_list, &sort_typo_type);
 
     // 結果が必要な数以下の場合、そのまま返す
@@ -415,12 +524,17 @@ fn get_top_similar_words(
 /// * `check_word` - Words to check(チェックする単語)
 /// * `output_levenshtein_cutoff` - Cutoff value of Levenshtein distance to output(出力するレーベンシュタイン距離のカットオフ値)
 /// * `pickup_similar_word_num` - Number of words to store in the list of similar_word_list(似ている単語のリストに格納する単語数)
+/// * `sort_order_of_typo_type` - Sort criteria by TypoType for output list(出力する似ている単語リストのTypoTypeによるソート条件)
 ///
 /// # Examples
 ///
 /// ```
-/// let a = "applo";
-/// let typo_chec_result = typo_checker::check_a_word(a.to_string(), Some(3), Some(20));
+/// use typo_checker::TypoType;
+/// use typo_checker::CharacterPositon;
+///
+/// let check_word = "applo";
+/// let custom_sort_order = vec![TypoType::SimilarShapes, TypoType::CloseKeyboardPlacement, TypoType::UndefinedType, TypoType::ExtraCharacters { character: 'A', position: CharacterPositon::Head, }, TypoType::MissingCharacters { character: 'Z', position: CharacterPositon::Tail, }, ];
+/// let typo_chec_result = typo_checker::check_a_word(check_word.to_string(), Some(3), 20, Some(&custom_sort_order));
 /// println!("typo_chec_result: {:?}", typo_chec_result);
 /// ```
 pub fn check_a_word(
@@ -526,11 +640,7 @@ mod tests {
     fn test_find_missing_or_extra_chars_head() {
         // Head のテストケース
         let check_word = "ello";
-        let similar_word = SimilarWord {
-            spelling: "hello".to_string(),
-            typo_type: TypoType::UndefinedType,
-            levenshtein_length: 1,
-        };
+        let similar_word = SimilarWord::new("hello".to_string(), 1);
         let result = find_missing_or_extra_chars(check_word, similar_word);
 
         assert_eq!(
@@ -546,11 +656,7 @@ mod tests {
     fn test_find_missing_or_extra_chars_tail() {
         // Tail のテストケース
         let check_word = "hell";
-        let similar_word = SimilarWord {
-            spelling: "hello".to_string(),
-            typo_type: TypoType::UndefinedType,
-            levenshtein_length: 1,
-        };
+        let similar_word = SimilarWord::new("hello".to_string(), 1);
         let result = find_missing_or_extra_chars(check_word, similar_word);
 
         assert_eq!(
@@ -566,11 +672,7 @@ mod tests {
     fn test_find_extra_chars_head() {
         // Head の余分な文字テストケース
         let check_word = "ahello";
-        let similar_word = SimilarWord {
-            spelling: "hello".to_string(),
-            typo_type: TypoType::UndefinedType,
-            levenshtein_length: 1,
-        };
+        let similar_word = SimilarWord::new("hello".to_string(), 1);
         let result = find_missing_or_extra_chars(check_word, similar_word);
 
         assert_eq!(
@@ -586,11 +688,7 @@ mod tests {
     fn test_find_extra_chars_tail() {
         // Tail の余分な文字テストケース
         let check_word = "helloo";
-        let similar_word = SimilarWord {
-            spelling: "hello".to_string(),
-            typo_type: TypoType::UndefinedType,
-            levenshtein_length: 1,
-        };
+        let similar_word = SimilarWord::new("hello".to_string(), 1);
         let result = find_missing_or_extra_chars(check_word, similar_word);
 
         assert_eq!(
@@ -606,11 +704,7 @@ mod tests {
     fn test_find_typo_type_none() {
         // 正しい単語の場合のテストケース
         let check_word = "hello";
-        let similar_word = SimilarWord {
-            spelling: "hello".to_string(),
-            typo_type: TypoType::UndefinedType,
-            levenshtein_length: 0,
-        };
+        let similar_word = SimilarWord::new("hello".to_string(), 1);
         let result = find_missing_or_extra_chars(check_word, similar_word);
 
         assert_eq!(result.typo_type, TypoType::UndefinedType);
@@ -619,12 +713,8 @@ mod tests {
     #[test]
     fn test_find_multiple_missing_chars() {
         // 複数の文字が足りない場合のテストケース
-        let check_word = "hllo";
-        let similar_word = SimilarWord {
-            spelling: "hello".to_string(),
-            typo_type: TypoType::UndefinedType,
-            levenshtein_length: 1,
-        };
+        let check_word = "hlo";
+        let similar_word = SimilarWord::new("hello".to_string(), 1);
         let result = find_missing_or_extra_chars(check_word, similar_word);
 
         assert_eq!(result.typo_type, TypoType::UndefinedType);
@@ -633,14 +723,318 @@ mod tests {
     #[test]
     fn test_find_multiple_extra_chars() {
         // 複数の文字が余分な場合のテストケース
-        let check_word = "heello";
-        let similar_word = SimilarWord {
-            spelling: "hello".to_string(),
-            typo_type: TypoType::UndefinedType,
-            levenshtein_length: 1,
-        };
+        let check_word = "heelllo";
+        let similar_word = SimilarWord::new("hello".to_string(), 1);
         let result = find_missing_or_extra_chars(check_word, similar_word);
 
         assert_eq!(result.typo_type, TypoType::UndefinedType);
+    }
+
+    #[test]
+    fn test_find_different_a_char_similar_shapes() {
+        let check_word = "cot";
+        let temp_word = SimilarWord::new("cat".to_string(), 1);
+        let result = find_different_a_char(check_word, temp_word);
+
+        if let TypoType::SimilarShapes = result.typo_type {
+            // テストが通れば成功
+        } else {
+            panic!(
+                "Expected TypoType::SimilarShapes but got {:?}",
+                result.typo_type
+            );
+        }
+    }
+
+    #[test]
+    fn test_find_different_a_char_close_keyboard_placement() {
+        let check_word = "try".to_string();
+        let similar_word = SimilarWord {
+            spelling: "trt".to_string(), // "y" -> "t" は隣接キーだが SimilarShapes には該当しない
+            levenshtein_length: 1,
+            typo_type: TypoType::UndefinedType,
+        };
+
+        // `find_different_a_char`関数を呼び出して、誤りのタイプを判別
+        let result = find_different_a_char(&check_word, similar_word);
+
+        // `TypoType::CloseKeyboardPlacement` が設定されているか確認
+        assert!(matches!(result.typo_type, TypoType::CloseKeyboardPlacement));
+    }
+
+    #[test]
+    fn test_find_different_a_char_no_typo_detected() {
+        let check_word = "hoxe";
+        let temp_word = SimilarWord::new("home".to_string(), 0);
+        let result = find_different_a_char(check_word, temp_word);
+
+        if let TypoType::UndefinedType = result.typo_type {
+            // テストが通れば成功
+        } else {
+            panic!(
+                "Expected TypoType::UndefinedType but got {:?}",
+                result.typo_type
+            );
+        }
+    }
+
+    #[test]
+    fn test_get_top_similar_words_default_typo_type_sorting() {
+        let check_word = "tets".to_string();
+        let check_word_length = check_word.len();
+        let similar_word_list = vec![
+            SimilarWord {
+                spelling: "test".to_string(),
+                levenshtein_length: 1,
+                typo_type: TypoType::UndefinedType,
+            },
+            SimilarWord {
+                spelling: "tsts".to_string(),
+                levenshtein_length: 1,
+                typo_type: TypoType::CloseKeyboardPlacement,
+            },
+            SimilarWord {
+                spelling: "tots".to_string(),
+                levenshtein_length: 1,
+                typo_type: TypoType::SimilarShapes,
+            },
+            SimilarWord {
+                spelling: "ttets".to_string(),
+                levenshtein_length: 1,
+                typo_type: TypoType::ExtraCharacters {
+                    character: 's',
+                    position: CharacterPositon::Head,
+                },
+            },
+            SimilarWord {
+                spelling: "tetss".to_string(),
+                levenshtein_length: 1,
+                typo_type: TypoType::ExtraCharacters {
+                    character: 's',
+                    position: CharacterPositon::Tail,
+                },
+            },
+            SimilarWord {
+                spelling: "ets".to_string(),
+                levenshtein_length: 1,
+                typo_type: TypoType::MissingCharacters {
+                    character: 't',
+                    position: CharacterPositon::Head,
+                },
+            },
+            SimilarWord {
+                spelling: "tet".to_string(),
+                levenshtein_length: 1,
+                typo_type: TypoType::MissingCharacters {
+                    character: 's',
+                    position: CharacterPositon::Tail,
+                },
+            },
+        ];
+
+        let result = get_top_similar_words(
+            check_word,
+            check_word_length,
+            similar_word_list,
+            None,
+            7,
+            None,
+        );
+
+        // デフォルトの並び順: ExtraCharacters -> MissingCharacters -> SimilarShapes -> CloseKeyboardPlacement -> UndefinedType
+        assert_eq!(result.len(), 7);
+        assert!(matches!(
+            result[0].typo_type,
+            TypoType::ExtraCharacters { .. }
+        ));
+        assert!(matches!(
+            result[1].typo_type,
+            TypoType::ExtraCharacters { .. }
+        ));
+        assert!(matches!(
+            result[2].typo_type,
+            TypoType::MissingCharacters { .. }
+        ));
+        assert!(matches!(
+            result[3].typo_type,
+            TypoType::MissingCharacters { .. }
+        ));
+        assert!(matches!(result[4].typo_type, TypoType::SimilarShapes));
+        assert!(matches!(
+            result[5].typo_type,
+            TypoType::CloseKeyboardPlacement
+        ));
+        assert!(matches!(result[6].typo_type, TypoType::UndefinedType));
+    }
+
+    #[test]
+    fn test_get_top_similar_words_basic_sorting() {
+        let check_word = "test".to_string();
+        let check_word_length = check_word.len();
+        let similar_word_list = vec![
+            SimilarWord::new("best".to_string(), 1),
+            SimilarWord::new("tost".to_string(), 1),
+            SimilarWord::new("toast".to_string(), 2),
+        ];
+
+        let result = get_top_similar_words(
+            check_word,
+            check_word_length,
+            similar_word_list,
+            None,
+            2,
+            None,
+        );
+
+        assert_eq!(result.len(), 2);
+        assert_eq!(result[0].spelling, "tost");
+        assert_eq!(result[1].spelling, "best");
+    }
+
+    #[test]
+    fn test_get_top_similar_words_with_cutoff() {
+        let check_word = "test".to_string();
+        let check_word_length = check_word.len();
+        let similar_word_list = vec![
+            SimilarWord::new("tost".to_string(), 1),
+            SimilarWord::new("toast".to_string(), 2),
+            SimilarWord::new("tasteo".to_string(), 3),
+        ];
+
+        let result = get_top_similar_words(
+            check_word,
+            check_word_length,
+            similar_word_list,
+            Some(2),
+            3,
+            None,
+        );
+
+        assert_eq!(result.len(), 2);
+        assert!(result.iter().all(|w| w.levenshtein_length <= 2));
+    }
+
+    #[test]
+    fn test_get_top_similar_words_typo_type_sorting() {
+        let check_word = "tets".to_string();
+        let check_word_length = check_word.len();
+        let similar_word_list = vec![
+            SimilarWord {
+                spelling: "test".to_string(),
+                levenshtein_length: 1,
+                typo_type: TypoType::UndefinedType,
+            },
+            SimilarWord {
+                spelling: "tsts".to_string(),
+                levenshtein_length: 1,
+                typo_type: TypoType::CloseKeyboardPlacement,
+            },
+            SimilarWord {
+                spelling: "tots".to_string(),
+                levenshtein_length: 1,
+                typo_type: TypoType::SimilarShapes,
+            },
+            SimilarWord {
+                spelling: "ttets".to_string(),
+                levenshtein_length: 1,
+                typo_type: TypoType::ExtraCharacters {
+                    character: 's',
+                    position: CharacterPositon::Head,
+                },
+            },
+            SimilarWord {
+                spelling: "tetss".to_string(),
+                levenshtein_length: 1,
+                typo_type: TypoType::ExtraCharacters {
+                    character: 's',
+                    position: CharacterPositon::Tail,
+                },
+            },
+            SimilarWord {
+                spelling: "ets".to_string(),
+                levenshtein_length: 1,
+                typo_type: TypoType::MissingCharacters {
+                    character: 't',
+                    position: CharacterPositon::Head,
+                },
+            },
+            SimilarWord {
+                spelling: "tet".to_string(),
+                levenshtein_length: 1,
+                typo_type: TypoType::MissingCharacters {
+                    character: 's',
+                    position: CharacterPositon::Tail,
+                },
+            },
+        ];
+
+        let custom_sort_order = vec![
+            TypoType::SimilarShapes,
+            TypoType::CloseKeyboardPlacement,
+            TypoType::UndefinedType,
+            TypoType::ExtraCharacters {
+                character: 'A',
+                position: CharacterPositon::Head,
+            },
+            TypoType::MissingCharacters {
+                character: 'Z',
+                position: CharacterPositon::Tail,
+            },
+        ];
+
+        let result = get_top_similar_words(
+            check_word,
+            check_word_length,
+            similar_word_list,
+            None,
+            7,
+            Some(&custom_sort_order),
+        );
+
+        assert_eq!(result.len(), 7);
+        assert!(matches!(result[0].typo_type, TypoType::SimilarShapes));
+        assert!(matches!(
+            result[1].typo_type,
+            TypoType::CloseKeyboardPlacement
+        ));
+        assert!(matches!(result[2].typo_type, TypoType::UndefinedType));
+        assert!(matches!(
+            result[3].typo_type,
+            TypoType::ExtraCharacters { .. }
+        ));
+        assert!(matches!(
+            result[4].typo_type,
+            TypoType::ExtraCharacters { .. }
+        ));
+        assert!(matches!(
+            result[5].typo_type,
+            TypoType::MissingCharacters { .. }
+        ));
+        assert!(matches!(
+            result[6].typo_type,
+            TypoType::MissingCharacters { .. }
+        ));
+    }
+
+    #[test]
+    fn test_get_top_similar_words_limit_results() {
+        let check_word = "tets".to_string();
+        let check_word_length = check_word.len();
+        let similar_word_list = vec![
+            SimilarWord::new("tost".to_string(), 1),
+            SimilarWord::new("tetsaa".to_string(), 2),
+            SimilarWord::new("tetsaao".to_string(), 2),
+        ];
+
+        let result = get_top_similar_words(
+            check_word,
+            check_word_length,
+            similar_word_list,
+            None,
+            1,
+            None,
+        );
+
+        assert_eq!(result.len(), 1);
     }
 }
