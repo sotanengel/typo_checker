@@ -1,6 +1,6 @@
 [package]
 name = "typo_checker"
-version = "0.2.0"
+version = "1.0.0"
 edition = "2021"
 
 description = "Searches for typos of English words and returns matches or similar words.(英単語のタイポを検索し、合致もしくは類似する単語を返却します)"
@@ -13,3 +13,4 @@ exclude = ["src/create_dict.py", "images/", "src/20241025_ejdict-hand-utf8.txt"]
 
 
 [dependencies]
+regex = "1.11.1"
